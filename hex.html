@@ -1,0 +1,167 @@
+<html>
+<meta charset="utf-8">
+<head>
+  <script src="https://d3js.org/d3.v4.min.js"></script>
+  <script src="https://unpkg.com/d3-3d/build/d3-3d.js"></script>
+  <script src="https://unpkg.com/mathjs@4.0.1/dist/math.min.js" type="text/javascript"></script>
+  <style>
+    body {
+      margin: 3em;
+    }
+  </style>
+</head>
+<body>
+
+<h2>O kockách a pyramídach</h2>
+
+<div>Size <input type="range" min="2" max="5" value="2" class="slider" id="D"> </div>
+<div>Cube <input type="range" min="0" max="100" value="0" class="slider" id="A"> Pyramid </div>
+<svg width="800" height="600"></svg>
+
+<p>
+matika za 3 minúty:
+<ul>
+  <li> <a href="https://www.youtube.com/watch?v=8ctUaxKsnoQ">[hádanka] Matematika ukladania plechoviek</a> </li>
+  <li> <a href="https://www.youtube.com/watch?v=B401yUjw6L4">[Riešenie hádanky] Matematika ukladania plechoviek</a> </li>
+</ul>
+wikipedia:
+<ul>
+  <li> <a href="https://en.wikipedia.org/wiki/Centered_hexagonal_number">Centered hexagonal number</a>
+  <blockquote>
+  The sum of the first n centered hexagonal numbers is <i>n</i><sup>3</sup>. That is, centered hexagonal pyramidal
+  numbers and cubes are the same numbers, but they represent different shapes. Viewed from the
+  opposite perspective, centered hexagonal numbers are differences of two consecutive cubes, so that
+  the centered hexagonal numbers are the gnomon of the cubes.
+  </blockquote>
+  </li>
+</ul>
+
+</p>
+
+<script>
+  var svg = d3.select('svg').call(d3.drag().on('drag', dragged).on('start', dragStart)).append('g');
+  var sliderA = document.getElementById('A');
+  var sliderD = document.getElementById('D');
+  var A = sliderA.value = 0;
+  var d = sliderD.value = 3;
+  sliderA.oninput = function() { A = this.value/100; init(); };
+  sliderD.oninput = function() { d = this.value; init0(); init(); };
+
+  var isqrt3 = 1/math.sqrt(3);
+  var u = [isqrt3, isqrt3, isqrt3];
+  var U = [1, 1, 1];
+
+  var origin  = [350, 250], alpha = -0.5410520681182425, beta = 1.291543646475805;
+  var color   = [d3.color('crimson'), d3.color('teal'), d3.color('limegreen'), d3.color('purple'), d3.color('tomato')];
+
+  var P3D = d3._3d()
+      .scale(50)
+      .origin(origin)
+      .rotateCenter([(d-1)/2,(d-1)/2,(d-1)/2])
+      .rotateX(alpha)
+      .rotateY(beta)
+      .shape('POINT');
+
+  var T3D = d3._3d()
+      .scale(50)
+      .origin(origin)
+      .rotateCenter([(d-1)/2,(d-1)/2,(d-1)/2])
+      .rotateX(alpha)
+      .rotateY(beta)
+      .shape('PLANE');
+
+
+  function toHex(p) {
+    return math.add(math.subtract(p, math.multiply(math.dot(p, u), u)), math.multiply(U, math.max(p[0],p[1],p[2])*1.2));
+  }
+
+  var cube = [], hex = [], points = [], idx = {}, col = [];
+
+  function init0() {
+    cube = [];
+    hex = [];
+    points = [];
+    idx = {};
+    col = [];
+    var I=0;
+    for (var x = 0; x < d; x++) {
+      for (var y = 0; y < d; y++) {
+        for (var z = 0; z < d; z++) {
+          cube.push([x,y,z]);
+          hex.push(toHex([x, y, z]));
+          points.push([x,y,z]);
+          idx[[x,y,z]] = I++;
+        }
+      }
+    }
+  }
+  init0();
+    
+  var faces = [];
+  init();
+
+  var mx, my, mouseX, mouseY;
+
+  function dragStart(){
+    mx = d3.event.x;
+    my = d3.event.y;
+  }
+
+  function dragged(){
+    var nx = d3.event.x, ny = d3.event.y;
+    beta  += (nx - mx) * Math.PI / 360;
+    alpha -= (ny - my) * Math.PI / 360;
+    processData(P3D.rotateX(alpha).rotateY(beta)(points), T3D.rotateX(alpha).rotateY(beta)(faces));
+    mx = nx; my = ny;
+  }
+
+  function init() {
+    for (var i=0; i<cube.length; i++) {
+      points[i] = math.add(math.multiply(1-A, cube[i]), math.multiply(A, hex[i]));
+    }
+    faces = [];
+    col = [];
+    var f = function(p) { return points[idx[p]]; };
+    for (var k = 1; k < d; k++) {
+      faces.push([f([0,k,0]),f([0,k,k]),f([k,k,k]),f([k,k,0])]);
+      faces.push([f([0,0,k]),f([k,0,k]),f([k,k,k]),f([0,k,k])]);
+      faces.push([f([k,0,0]),f([k,k,0]),f([k,k,k]),f([k,0,k])]);
+      col.push(k);
+      col.push(k);
+      col.push(k);
+    }
+    processData(P3D(points), T3D(faces));
+  }
+
+  function trColor(d, i) { var c = color[math.floor(i/3)]; return d.ccw ? c.brighter(1) : c.darker(2); }
+
+  function processData(points, faces){
+		var ps = svg.selectAll('circle').data(points);
+		ps.enter()
+      .append('circle')
+      .merge(ps)
+      .attr('fill',   function(d, i){ return d3.color('black'); })
+      .attr('stroke', function(d, i){ return d3.color('black').darker(0.5); })
+      //.sort(function(a, b){    return d3.descending(a.rotated.z, b.rotated.z); })
+      .attr('cx', function(d){ return d.projected.x; })
+      .attr('cy', function(d){ return d.projected.y; })
+      .attr('r' , function(d){ return 5; }) //zScale(d.rotated.z); })
+      .attr('d', P3D.draw);
+		ps.exit().remove();
+
+    var tr = svg.selectAll('path').data(faces);
+    tr.enter()
+      .append('path')
+      .merge(tr)
+      .attr('stroke', trColor)
+      .attr('fill', trColor)
+      .attr('fill-opacity', 0.3)
+      .sort(T3D.sort)
+      .attr('d', T3D.draw);
+    tr.exit().remove();
+  }
+
+  processData(P3D(points), T3D(faces));
+</script>
+</body>
+</html>
